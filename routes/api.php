@@ -14,5 +14,5 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-    Route::apiResource('categories', CategoryController::class)->only(['index', 'store']);
+    Route::apiResource('categories', CategoryController::class);
 });

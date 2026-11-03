@@ -70,3 +70,80 @@ test('store requires a unique name', function () {
 
     expect(Category::where('name', 'Bebidas')->count())->toBe(1);
 });
+
+test('show returns a category', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $category = Category::factory()->create(['name' => 'Bebidas']);
+
+    $this->getJson("/api/categories/{$category->id}")
+        ->assertOk()
+        ->assertJson([
+            'status' => true,
+            'message' => 'Category retrieved successfully',
+            'data' => ['id' => $category->id, 'name' => 'Bebidas'],
+        ]);
+});
+
+test('show returns not found for a missing category', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $this->getJson('/api/categories/999')->assertNotFound();
+});
+
+test('update changes the category name', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $category = Category::factory()->create(['name' => 'Bebidas']);
+
+    $this->putJson("/api/categories/{$category->id}", ['name' => 'Bebidas sin alcohol'])
+        ->assertOk()
+        ->assertJson([
+            'status' => true,
+            'message' => 'Category updated successfully',
+            'data' => ['name' => 'Bebidas sin alcohol'],
+        ]);
+
+    $this->assertDatabaseHas('categories', ['name' => 'Bebidas sin alcohol']);
+});
+
+test('update allows keeping the same name', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $category = Category::factory()->create(['name' => 'Bebidas']);
+
+    $this->putJson("/api/categories/{$category->id}", ['name' => 'Bebidas'])->assertOk();
+});
+
+test('update requires a unique name', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    Category::factory()->create(['name' => 'Bebidas']);
+    $category = Category::factory()->create(['name' => 'Lácteos']);
+
+    $this->putJson("/api/categories/{$category->id}", ['name' => 'Bebidas'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('name');
+});
+
+test('destroy deletes a category', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $category = Category::factory()->create();
+
+    $this->deleteJson("/api/categories/{$category->id}")
+        ->assertOk()
+        ->assertJson([
+            'status' => true,
+            'message' => 'Category deleted successfully',
+            'data' => null,
+        ]);
+
+    $this->assertDatabaseMissing('categories', ['id' => $category->id]);
+});
+
+test('destroy returns not found for a missing category', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $this->deleteJson('/api/categories/999')->assertNotFound();
+});

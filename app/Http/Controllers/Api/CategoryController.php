@@ -32,4 +32,39 @@ class CategoryController extends Controller
             'data' => $category,
         ], 201);
     }
+
+    public function show(Category $category): JsonResponse
+    {
+        return response()->json([
+            'status' => true,
+            'message' => 'Category retrieved successfully',
+            'data' => $category,
+        ]);
+    }
+
+    public function update(Request $request, Category $category): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,'.$category->id,
+        ]);
+
+        $category->update($validated);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Category updated successfully',
+            'data' => $category,
+        ]);
+    }
+
+    public function destroy(Category $category): JsonResponse
+    {
+        $category->delete();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Category deleted successfully',
+            'data' => null,
+        ]);
+    }
 }
