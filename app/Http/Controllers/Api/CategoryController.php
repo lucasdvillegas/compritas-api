@@ -13,7 +13,7 @@ class CategoryController extends Controller
     {
         return response()->json([
             'status' => true,
-            'message' => 'Categories retrieved successfully',
+            'message' => 'Categorías obtenidas correctamente.',
             'data' => Category::orderBy('name')->get(),
         ]);
     }
@@ -28,7 +28,7 @@ class CategoryController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Category created successfully',
+            'message' => 'Categoría creada correctamente.',
             'data' => $category,
         ], 201);
     }
@@ -37,7 +37,7 @@ class CategoryController extends Controller
     {
         return response()->json([
             'status' => true,
-            'message' => 'Category retrieved successfully',
+            'message' => 'Categoría obtenida correctamente.',
             'data' => $category,
         ]);
     }
@@ -52,7 +52,7 @@ class CategoryController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Category updated successfully',
+            'message' => 'Categoría actualizada correctamente.',
             'data' => $category,
         ]);
     }
@@ -63,7 +63,7 @@ class CategoryController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Category deleted successfully',
+            'message' => 'Categoría eliminada correctamente.',
             'data' => null,
         ]);
     }

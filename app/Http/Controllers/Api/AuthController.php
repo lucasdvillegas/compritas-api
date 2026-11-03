@@ -25,11 +25,11 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'User registered successfully',
+            'message' => 'Usuario registrado correctamente.',
             'data' => [
                 'user' => $user,
-                'token' => $token
-            ]
+                'token' => $token,
+            ],
         ], 201);
     }
 
@@ -44,7 +44,7 @@ class AuthController extends Controller
 
         if (! $user || ! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'email' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
@@ -52,7 +52,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'User logged in successfully',
+            'message' => 'Sesión iniciada correctamente.',
             'data' => [
                 'user' => $user,
                 'token' => $token,

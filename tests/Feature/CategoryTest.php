@@ -31,7 +31,7 @@ test('index returns categories ordered by name', function () {
         ->assertOk()
         ->assertJson([
             'status' => true,
-            'message' => 'Categories retrieved successfully',
+            'message' => 'Categorías obtenidas correctamente.',
         ])
         ->assertJsonPath('data.0.name', 'Bebidas')
         ->assertJsonPath('data.1.name', 'Lácteos');
@@ -44,7 +44,7 @@ test('store creates a category', function () {
         ->assertCreated()
         ->assertJson([
             'status' => true,
-            'message' => 'Category created successfully',
+            'message' => 'Categoría creada correctamente.',
             'data' => ['name' => 'Bebidas'],
         ]);
 
@@ -80,7 +80,7 @@ test('show returns a category', function () {
         ->assertOk()
         ->assertJson([
             'status' => true,
-            'message' => 'Category retrieved successfully',
+            'message' => 'Categoría obtenida correctamente.',
             'data' => ['id' => $category->id, 'name' => 'Bebidas'],
         ]);
 });
@@ -100,7 +100,7 @@ test('update changes the category name', function () {
         ->assertOk()
         ->assertJson([
             'status' => true,
-            'message' => 'Category updated successfully',
+            'message' => 'Categoría actualizada correctamente.',
             'data' => ['name' => 'Bebidas sin alcohol'],
         ]);
 
@@ -135,7 +135,7 @@ test('destroy deletes a category', function () {
         ->assertOk()
         ->assertJson([
             'status' => true,
-            'message' => 'Category deleted successfully',
+            'message' => 'Categoría eliminada correctamente.',
             'data' => null,
         ]);
 
