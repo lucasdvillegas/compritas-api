@@ -49,7 +49,40 @@ test('regenerate pin replaces the previous one', function () {
         ->and($user->pin)->toMatch('/^\d{8}$/');
 });
 
+test('profile name can be updated', function () {
+    [$user] = actingAsWorkspaceUser();
+
+    $this->patchJson('/api/profile', ['name' => 'Lucas Villegas'])
+        ->assertOk()
+        ->assertJsonPath('data.user.id', $user->id)
+        ->assertJsonPath('data.user.name', 'Lucas Villegas')
+        ->assertJsonPath('data.user.email', $user->email);
+
+    expect($user->fresh()->name)->toBe('Lucas Villegas');
+});
+
+test('profile name is required to update it', function () {
+    actingAsWorkspaceUser();
+
+    $this->patchJson('/api/profile', ['name' => ''])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('name');
+
+    $this->patchJson('/api/profile', [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('name');
+});
+
+test('profile name cannot exceed the maximum length', function () {
+    actingAsWorkspaceUser();
+
+    $this->patchJson('/api/profile', ['name' => str_repeat('a', 256)])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('name');
+});
+
 test('profile requires authentication', function () {
     $this->getJson('/api/profile')->assertUnauthorized();
+    $this->patchJson('/api/profile', ['name' => 'Lucas'])->assertUnauthorized();
     $this->postJson('/api/profile/pin/regenerate')->assertUnauthorized();
 });

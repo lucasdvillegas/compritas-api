@@ -27,6 +27,29 @@ class ProfileController extends Controller
         ]);
     }
 
+    public function update(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $user = $request->user();
+        $user->name = $validated['name'];
+        $user->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Perfil actualizado correctamente.',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+            ],
+        ]);
+    }
+
     public function regeneratePin(Request $request): JsonResponse
     {
         $user = $request->user();

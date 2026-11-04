@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/lists/{list}/items/{item}', [ShoppingListItemController::class, 'destroy']);
 
     Route::get('/profile', [ProfileController::class, 'show']);
+    Route::patch('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/pin/regenerate', [ProfileController::class, 'regeneratePin']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
