@@ -14,10 +14,39 @@ class ProductController extends Controller
     {
         $workspace = $request->user()->currentWorkspace();
 
+        $validated = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 10);
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $products = $workspace->products()
+            ->with('category')
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->where('name', 'like', "%{$search}%")
+                        ->orWhereHas(
+                            'category',
+                            fn ($categoryQuery) => $categoryQuery->where('name', 'like', "%{$search}%"),
+                        );
+                });
+            })
+            ->orderBy('name')
+            ->paginate($perPage);
+
         return response()->json([
             'status' => true,
             'message' => 'Productos obtenidos correctamente.',
-            'data' => $workspace->products()->with('category')->orderBy('name')->get(),
+            'data' => $products->items(),
+            'meta' => [
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total(),
+                'has_more' => $products->hasMorePages(),
+            ],
         ]);
     }
 

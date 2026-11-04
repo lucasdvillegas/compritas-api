@@ -38,6 +38,50 @@ test('index returns only the current workspace categories ordered by name', func
         ->assertJsonPath('data.1.name', 'Lácteos');
 });
 
+test('index paginates categories with ten items per page', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    foreach (range(1, 12) as $index) {
+        Category::factory()->create([
+            'workspace_id' => $workspace->id,
+            'name' => sprintf('Categoría %02d', $index),
+        ]);
+    }
+
+    $this->getJson('/api/categories?per_page=10')
+        ->assertOk()
+        ->assertJsonCount(10, 'data')
+        ->assertJsonPath('meta.total', 12)
+        ->assertJsonPath('meta.current_page', 1)
+        ->assertJsonPath('meta.has_more', true);
+
+    $this->getJson('/api/categories?per_page=10&page=2')
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('meta.current_page', 2)
+        ->assertJsonPath('meta.has_more', false);
+});
+
+test('index searches categories by name', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
+    Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Lácteos']);
+
+    $this->getJson('/api/categories?search=beb')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.name', 'Bebidas');
+});
+
+test('index rejects an invalid per page value', function () {
+    actingAsWorkspaceUser();
+
+    $this->getJson('/api/categories?per_page=51')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('per_page');
+});
+
 test('store creates a category in the current workspace', function () {
     [, $workspace] = actingAsWorkspaceUser();
 

@@ -13,10 +13,30 @@ class CategoryController extends Controller
     {
         $workspace = $request->user()->currentWorkspace();
 
+        $validated = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 10);
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $categories = $workspace->categories()
+            ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->paginate($perPage);
+
         return response()->json([
             'status' => true,
             'message' => 'Categorías obtenidas correctamente.',
-            'data' => $workspace->categories()->orderBy('name')->get(),
+            'data' => $categories->items(),
+            'meta' => [
+                'current_page' => $categories->currentPage(),
+                'last_page' => $categories->lastPage(),
+                'per_page' => $categories->perPage(),
+                'total' => $categories->total(),
+                'has_more' => $categories->hasMorePages(),
+            ],
         ]);
     }
 

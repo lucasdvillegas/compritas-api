@@ -53,6 +53,67 @@ test('index returns only the current workspace products ordered by name', functi
         ->assertJsonPath('data.1.category.name', 'Lácteos');
 });
 
+test('index paginates products with ten items per page', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    foreach (range(1, 12) as $index) {
+        Product::factory()->create([
+            'workspace_id' => $workspace->id,
+            'name' => sprintf('Producto %02d', $index),
+        ]);
+    }
+
+    $this->getJson('/api/products?per_page=10')
+        ->assertOk()
+        ->assertJsonCount(10, 'data')
+        ->assertJsonPath('meta.total', 12)
+        ->assertJsonPath('meta.current_page', 1)
+        ->assertJsonPath('meta.has_more', true);
+
+    $this->getJson('/api/products?per_page=10&page=2')
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('meta.current_page', 2)
+        ->assertJsonPath('meta.has_more', false);
+});
+
+test('index searches products by name or category', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $frutas = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Frutas']);
+    $lacteos = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Lácteos']);
+
+    Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $frutas->id,
+        'name' => 'Manzana',
+    ]);
+
+    Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $lacteos->id,
+        'name' => 'Leche',
+    ]);
+
+    $this->getJson('/api/products?search=manz')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.name', 'Manzana');
+
+    $this->getJson('/api/products?search=Frutas')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.name', 'Manzana');
+});
+
+test('index rejects an invalid per page value', function () {
+    actingAsWorkspaceUser();
+
+    $this->getJson('/api/products?per_page=51')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('per_page');
+});
+
 test('store creates a product in the current workspace', function () {
     [, $workspace] = actingAsWorkspaceUser();
 
