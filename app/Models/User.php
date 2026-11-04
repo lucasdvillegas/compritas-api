@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'pin'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -41,13 +41,38 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    /**
+     * @return BelongsToMany<ShoppingList, $this>
+     */
+    public function shoppingLists(): BelongsToMany
+    {
+        return $this->belongsToMany(ShoppingList::class, 'shopping_list_user')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
     public function currentWorkspace(): Workspace
     {
         return $this->workspaces()->firstOrFail();
     }
 
+    public static function generatePin(): string
+    {
+        do {
+            $pin = (string) random_int(10000000, 99999999);
+        } while (static::query()->where('pin', $pin)->exists());
+
+        return $pin;
+    }
+
     protected static function booted(): void
     {
+        static::creating(function (User $user): void {
+            if (blank($user->pin)) {
+                $user->pin = static::generatePin();
+            }
+        });
+
         static::created(function (User $user): void {
             $workspace = Workspace::create([
                 'name' => 'Espacio personal',

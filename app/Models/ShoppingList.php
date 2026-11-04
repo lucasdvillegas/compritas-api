@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['workspace_id', 'name', 'status', 'completed_at', 'total_amount', 'manual_total'])]
@@ -37,6 +38,24 @@ class ShoppingList extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ShoppingListItem::class)->orderBy('id');
+    }
+
+    /**
+     * @return BelongsToMany<User, $this>
+     */
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'shopping_list_user')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<ShoppingListInvitation, $this>
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(ShoppingListInvitation::class);
     }
 
     /**

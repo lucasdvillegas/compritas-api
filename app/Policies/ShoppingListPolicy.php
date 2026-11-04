@@ -37,7 +37,7 @@ class ShoppingListPolicy
      */
     public function update(User $user, ShoppingList $shoppingList): bool
     {
-        return $this->isMember($user, $shoppingList)
+        return $this->isOwner($user, $shoppingList)
             && $shoppingList->status === ShoppingListStatus::Open;
     }
 
@@ -46,7 +46,7 @@ class ShoppingListPolicy
      */
     public function delete(User $user, ShoppingList $shoppingList): bool
     {
-        return $this->isMember($user, $shoppingList);
+        return $this->isOwner($user, $shoppingList);
     }
 
     public function complete(User $user, ShoppingList $shoppingList): bool
@@ -61,10 +61,24 @@ class ShoppingListPolicy
             && $shoppingList->status === ShoppingListStatus::Open;
     }
 
+    public function manageMembers(User $user, ShoppingList $shoppingList): bool
+    {
+        return $this->isOwner($user, $shoppingList)
+            && $shoppingList->status === ShoppingListStatus::Open;
+    }
+
     private function isMember(User $user, ShoppingList $shoppingList): bool
     {
-        return $user->workspaces()
-            ->where('workspaces.id', $shoppingList->workspace_id)
+        return $shoppingList->members()
+            ->where('users.id', $user->id)
+            ->exists();
+    }
+
+    private function isOwner(User $user, ShoppingList $shoppingList): bool
+    {
+        return $shoppingList->members()
+            ->where('users.id', $user->id)
+            ->wherePivot('role', 'owner')
             ->exists();
     }
 }

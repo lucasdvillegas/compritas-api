@@ -35,4 +35,11 @@ class ShoppingListFactory extends Factory
             'completed_at' => now(),
         ]);
     }
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (ShoppingList $list): void {
+            $list->members()->attach($list->workspace->owner_id, ['role' => 'owner']);
+        });
+    }
 }

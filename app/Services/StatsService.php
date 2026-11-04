@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\Workspace;
+use App\Models\ShoppingList;
+use App\Models\User;
 use Carbon\CarbonInterface;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,15 +15,15 @@ class StatsService
     /**
      * @return array<string, mixed>
      */
-    public function summary(Workspace $workspace, CarbonInterface $from, CarbonInterface $to): array
+    public function summary(User $user, CarbonInterface $from, CarbonInterface $to): array
     {
-        $lists = $this->completedListsQuery($workspace, $from, $to)
+        $lists = $this->completedListsQuery($user, $from, $to)
             ->selectRaw('COUNT(*) as lists_count')
             ->selectRaw('COALESCE(SUM(total_amount), 0) as total_spent')
             ->selectRaw('SUM(CASE WHEN manual_total IS NOT NULL THEN 1 ELSE 0 END) as lists_with_manual_total')
             ->first();
 
-        $items = $this->itemTotals($workspace, $from, $to);
+        $items = $this->itemTotals($user, $from, $to);
 
         $listsCount = (int) $lists->lists_count;
         $totalSpent = round((float) $lists->total_spent, 2);
@@ -46,12 +47,12 @@ class StatsService
     /**
      * @return array<string, mixed>
      */
-    public function monthly(Workspace $workspace, int $year): array
+    public function monthly(User $user, int $year): array
     {
         $from = Carbon::create($year, 1, 1)->startOfDay();
         $to = Carbon::create($year, 12, 31)->endOfDay();
 
-        $lists = $this->completedListsQuery($workspace, $from, $to)
+        $lists = $this->completedListsQuery($user, $from, $to)
             ->get(['id', 'completed_at', 'total_amount']);
 
         $breakdownByList = $this->breakdownByList($lists->pluck('id')->all());
@@ -97,9 +98,9 @@ class StatsService
     /**
      * @return array<string, mixed>
      */
-    public function categories(Workspace $workspace, CarbonInterface $from, CarbonInterface $to): array
+    public function categories(User $user, CarbonInterface $from, CarbonInterface $to): array
     {
-        $rows = $this->completedItemsQuery($workspace, $from, $to)
+        $rows = $this->completedItemsQuery($user, $from, $to)
             ->whereNotNull('shopping_list_items.unit_price')
             ->selectRaw('shopping_list_items.category_name as category_name')
             ->selectRaw('COALESCE(SUM(shopping_list_items.unit_price * shopping_list_items.quantity), 0) as amount')
@@ -118,16 +119,16 @@ class StatsService
 
         return [
             'categories' => $categories,
-            ...$this->itemTotals($workspace, $from, $to),
+            ...$this->itemTotals($user, $from, $to),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function topProducts(Workspace $workspace, CarbonInterface $from, CarbonInterface $to, int $limit): array
+    public function topProducts(User $user, CarbonInterface $from, CarbonInterface $to, int $limit): array
     {
-        $identityRows = $this->completedItemsQuery($workspace, $from, $to)
+        $identityRows = $this->completedItemsQuery($user, $from, $to)
             ->selectRaw('shopping_list_items.product_id as product_id')
             ->selectRaw('shopping_list_items.product_name as product_name')
             ->selectRaw('COUNT(DISTINCT shopping_lists.id) as times_purchased')
@@ -136,7 +137,7 @@ class StatsService
             ->groupBy('shopping_list_items.product_id', 'shopping_list_items.product_name')
             ->get();
 
-        $quantityRows = $this->completedItemsQuery($workspace, $from, $to)
+        $quantityRows = $this->completedItemsQuery($user, $from, $to)
             ->selectRaw('shopping_list_items.product_id as product_id')
             ->selectRaw('shopping_list_items.product_name as product_name')
             ->selectRaw("COALESCE(shopping_list_items.unit, 'unit') as unit")
@@ -229,9 +230,9 @@ class StatsService
     /**
      * @return array<string, mixed>
      */
-    private function itemTotals(Workspace $workspace, CarbonInterface $from, CarbonInterface $to): array
+    private function itemTotals(User $user, CarbonInterface $from, CarbonInterface $to): array
     {
-        $row = $this->completedItemsQuery($workspace, $from, $to)
+        $row = $this->completedItemsQuery($user, $from, $to)
             ->selectRaw('COUNT(*) as items_count')
             ->selectRaw('SUM(CASE WHEN shopping_list_items.unit_price IS NOT NULL THEN 1 ELSE 0 END) as priced_items_count')
             ->selectRaw(
@@ -273,21 +274,22 @@ class StatsService
     }
 
     private function completedListsQuery(
-        Workspace $workspace,
+        User $user,
         CarbonInterface $from,
         CarbonInterface $to,
-    ): HasMany {
+    ): EloquentBuilder {
         $start = Carbon::parse($from->toDateString())->startOfDay();
         $end = Carbon::parse($to->toDateString())->endOfDay();
 
-        return $workspace->shoppingLists()
+        return ShoppingList::query()
+            ->whereIn('id', $this->accessibleListIds($user))
             ->where('status', 'completed')
             ->where('completed_at', '>=', $start)
             ->where('completed_at', '<=', $end);
     }
 
     private function completedItemsQuery(
-        Workspace $workspace,
+        User $user,
         CarbonInterface $from,
         CarbonInterface $to,
     ): QueryBuilder {
@@ -296,10 +298,20 @@ class StatsService
 
         return DB::table('shopping_list_items')
             ->join('shopping_lists', 'shopping_lists.id', '=', 'shopping_list_items.shopping_list_id')
-            ->where('shopping_lists.workspace_id', $workspace->id)
+            ->whereIn('shopping_lists.id', $this->accessibleListIds($user))
             ->where('shopping_lists.status', 'completed')
             ->where('shopping_lists.completed_at', '>=', $start)
             ->where('shopping_lists.completed_at', '<=', $end);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function accessibleListIds(User $user): array
+    {
+        return $user->shoppingLists()
+            ->pluck('shopping_lists.id')
+            ->all();
     }
 
     private function productKey(mixed $productId, string $productName): string

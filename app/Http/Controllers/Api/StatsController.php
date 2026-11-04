@@ -21,7 +21,7 @@ class StatsController extends Controller
             'status' => true,
             'message' => 'Resumen de gastos obtenido correctamente.',
             'data' => $this->stats->summary(
-                $request->user()->currentWorkspace(),
+                $request->user(),
                 $from,
                 $to,
             ),
@@ -36,7 +36,7 @@ class StatsController extends Controller
             'status' => true,
             'message' => 'Gastos mensuales obtenidos correctamente.',
             'data' => $this->stats->monthly(
-                $request->user()->currentWorkspace(),
+                $request->user(),
                 $year,
             ),
         ]);
@@ -50,7 +50,7 @@ class StatsController extends Controller
             'status' => true,
             'message' => 'Gastos por categoría obtenidos correctamente.',
             'data' => $this->stats->categories(
-                $request->user()->currentWorkspace(),
+                $request->user(),
                 $from,
                 $to,
             ),
@@ -66,7 +66,7 @@ class StatsController extends Controller
             'status' => true,
             'message' => 'Productos más comprados obtenidos correctamente.',
             'data' => $this->stats->topProducts(
-                $request->user()->currentWorkspace(),
+                $request->user(),
                 $from,
                 $to,
                 $limit,

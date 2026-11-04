@@ -149,7 +149,7 @@ class ShoppingListItemController extends Controller
 
     private function findList(Request $request, int $listId): ShoppingList
     {
-        return $request->user()->currentWorkspace()
+        return $request->user()
             ->shoppingLists()
             ->findOrFail($listId);
     }

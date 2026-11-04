@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\ShoppingList;
+use App\Models\ShoppingListInvitation;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,4 +66,14 @@ function actingAsWorkspaceUser(): array
     Sanctum::actingAs($user);
 
     return [$user, $user->currentWorkspace()];
+}
+
+function inviteToList($test, ShoppingList $list, User $invitee): ShoppingListInvitation
+{
+    $test->postJson("/api/lists/{$list->id}/invitations", ['pin' => $invitee->pin])
+        ->assertCreated();
+
+    return ShoppingListInvitation::where('shopping_list_id', $list->id)
+        ->where('invitee_id', $invitee->id)
+        ->firstOrFail();
 }
