@@ -2,9 +2,8 @@
 
 use App\Models\Category;
 use App\Models\Product;
-use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
@@ -21,14 +20,25 @@ test('store requires authentication', function () {
     ])->assertUnauthorized();
 });
 
-test('index returns products ordered by name with their category', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('index returns only the current workspace products ordered by name', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $lacteos = Category::factory()->create(['name' => 'Lácteos']);
-    $bebidas = Category::factory()->create(['name' => 'Bebidas']);
+    $lacteos = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Lácteos']);
+    $bebidas = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
 
-    Product::factory()->for($lacteos)->create(['name' => 'Yogur natural']);
-    Product::factory()->for($bebidas)->create(['name' => 'Agua mineral']);
+    Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $lacteos->id,
+        'name' => 'Yogur natural',
+    ]);
+
+    Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $bebidas->id,
+        'name' => 'Agua mineral',
+    ]);
+
+    Product::factory()->create(['name' => 'Producto de otro workspace']);
 
     $this->getJson('/api/products')
         ->assertOk()
@@ -36,16 +46,17 @@ test('index returns products ordered by name with their category', function () {
             'status' => true,
             'message' => 'Productos obtenidos correctamente.',
         ])
+        ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.name', 'Agua mineral')
         ->assertJsonPath('data.0.category.name', 'Bebidas')
         ->assertJsonPath('data.1.name', 'Yogur natural')
         ->assertJsonPath('data.1.category.name', 'Lácteos');
 });
 
-test('store creates a product', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('store creates a product in the current workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $category = Category::factory()->create(['name' => 'Bebidas']);
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
 
     $this->postJson('/api/products', [
         'name' => 'Agua mineral',
@@ -57,6 +68,7 @@ test('store creates a product', function () {
             'message' => 'Producto creado correctamente.',
             'data' => [
                 'name' => 'Agua mineral',
+                'workspace_id' => $workspace->id,
                 'category_id' => $category->id,
                 'category' => ['id' => $category->id, 'name' => 'Bebidas'],
             ],
@@ -64,61 +76,83 @@ test('store creates a product', function () {
 
     $this->assertDatabaseHas('products', [
         'name' => 'Agua mineral',
+        'workspace_id' => $workspace->id,
         'category_id' => $category->id,
     ]);
 });
 
+test('store allows a product without a category', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $this->postJson('/api/products', ['name' => 'Agua mineral'])
+        ->assertCreated()
+        ->assertJsonPath('data.category_id', null)
+        ->assertJsonPath('data.category', null);
+
+    $this->assertDatabaseHas('products', [
+        'name' => 'Agua mineral',
+        'workspace_id' => $workspace->id,
+        'category_id' => null,
+    ]);
+});
+
 test('store requires a name', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsWorkspaceUser();
 
-    $category = Category::factory()->create();
-
-    $this->postJson('/api/products', [
-        'name' => '',
-        'category_id' => $category->id,
-    ])
+    $this->postJson('/api/products', ['name' => ''])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('name');
 });
 
-test('store requires a category', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('store rejects a category from another workspace', function () {
+    actingAsWorkspaceUser();
+
+    $category = Category::factory()->create();
+
+    $this->postJson('/api/products', [
+        'name' => 'Agua mineral',
+        'category_id' => $category->id,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('category_id');
+});
+
+test('store requires a unique name within the workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => 'Agua mineral',
+    ]);
 
     $this->postJson('/api/products', ['name' => 'Agua mineral'])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('category_id');
-});
-
-test('store requires an existing category', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $this->postJson('/api/products', [
-        'name' => 'Agua mineral',
-        'category_id' => 999,
-    ])
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors('category_id');
-});
-
-test('store requires a unique name', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $category = Category::factory()->create();
-    Product::factory()->for($category)->create(['name' => 'Agua mineral']);
-
-    $this->postJson('/api/products', [
-        'name' => 'Agua mineral',
-        'category_id' => $category->id,
-    ])
-        ->assertUnprocessable()
         ->assertJsonValidationErrors('name');
 });
 
-test('show returns a product with its category', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('store allows the same product name in another workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $category = Category::factory()->create(['name' => 'Bebidas']);
-    $product = Product::factory()->for($category)->create(['name' => 'Agua mineral']);
+    Product::factory()->create([
+        'workspace_id' => Workspace::factory()->create()->id,
+        'name' => 'Agua mineral',
+    ]);
+
+    $this->postJson('/api/products', ['name' => 'Agua mineral'])
+        ->assertCreated();
+
+    expect(Product::where('workspace_id', $workspace->id)->where('name', 'Agua mineral')->count())->toBe(1);
+});
+
+test('show returns a product with its category', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
+    $product = Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $category->id,
+        'name' => 'Agua mineral',
+    ]);
 
     $this->getJson("/api/products/{$product->id}")
         ->assertOk()
@@ -134,17 +168,29 @@ test('show returns a product with its category', function () {
 });
 
 test('show returns not found for a missing product', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsWorkspaceUser();
 
     $this->getJson('/api/products/999')->assertNotFound();
 });
 
-test('update changes the product', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('show returns not found for a product from another workspace', function () {
+    actingAsWorkspaceUser();
 
-    $category = Category::factory()->create(['name' => 'Bebidas']);
-    $newCategory = Category::factory()->create(['name' => 'Lácteos']);
-    $product = Product::factory()->for($category)->create(['name' => 'Agua mineral']);
+    $product = Product::factory()->create();
+
+    $this->getJson("/api/products/{$product->id}")->assertNotFound();
+});
+
+test('update changes the product', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
+    $newCategory = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Lácteos']);
+    $product = Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $category->id,
+        'name' => 'Agua mineral',
+    ]);
 
     $this->putJson("/api/products/{$product->id}", [
         'name' => 'Yogur natural',
@@ -169,48 +215,60 @@ test('update changes the product', function () {
 });
 
 test('update allows keeping the same name', function () {
-    Sanctum::actingAs(User::factory()->create());
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $product = Product::factory()->create(['name' => 'Agua mineral']);
+    $product = Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => 'Agua mineral',
+    ]);
 
     $this->putJson("/api/products/{$product->id}", [
         'name' => 'Agua mineral',
-        'category_id' => $product->category_id,
+        'category_id' => null,
     ])->assertOk();
 });
 
-test('update requires a unique name', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('update requires a unique name within the workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $category = Category::factory()->create();
-    Product::factory()->for($category)->create(['name' => 'Agua mineral']);
-    $product = Product::factory()->for($category)->create(['name' => 'Yogur natural']);
+    Product::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Agua mineral']);
+    $product = Product::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Yogur natural']);
 
     $this->putJson("/api/products/{$product->id}", [
         'name' => 'Agua mineral',
-        'category_id' => $category->id,
+        'category_id' => null,
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('name');
 });
 
-test('update requires a valid category', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('update rejects a category from another workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $product = Product::factory()->create();
+    $product = Product::factory()->create(['workspace_id' => $workspace->id]);
+    $category = Category::factory()->create();
 
     $this->putJson("/api/products/{$product->id}", [
         'name' => $product->name,
-        'category_id' => 999,
+        'category_id' => $category->id,
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('category_id');
 });
 
-test('destroy deletes a product', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('update returns not found for a product from another workspace', function () {
+    actingAsWorkspaceUser();
 
     $product = Product::factory()->create();
+
+    $this->putJson("/api/products/{$product->id}", ['name' => 'Otro nombre'])
+        ->assertNotFound();
+});
+
+test('destroy deletes a product', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $product = Product::factory()->create(['workspace_id' => $workspace->id]);
 
     $this->deleteJson("/api/products/{$product->id}")
         ->assertOk()
@@ -224,18 +282,32 @@ test('destroy deletes a product', function () {
 });
 
 test('destroy returns not found for a missing product', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsWorkspaceUser();
 
     $this->deleteJson('/api/products/999')->assertNotFound();
 });
 
-test('deleting a category deletes its products', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('destroy returns not found for a product from another workspace', function () {
+    actingAsWorkspaceUser();
 
-    $category = Category::factory()->create();
-    $product = Product::factory()->for($category)->create();
+    $product = Product::factory()->create();
+
+    $this->deleteJson("/api/products/{$product->id}")->assertNotFound();
+});
+
+test('deleting a category keeps its products with a null category', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $category = Category::factory()->create(['workspace_id' => $workspace->id]);
+    $product = Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category_id' => $category->id,
+    ]);
 
     $this->deleteJson("/api/categories/{$category->id}")->assertOk();
 
-    $this->assertDatabaseMissing('products', ['id' => $product->id]);
+    $this->assertDatabaseHas('products', [
+        'id' => $product->id,
+        'category_id' => null,
+    ]);
 });

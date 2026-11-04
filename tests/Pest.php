@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /*
@@ -47,4 +50,18 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Create an authenticated user and return their personal workspace.
+ *
+ * @return array{0: User, 1: Workspace}
+ */
+function actingAsWorkspaceUser(): array
+{
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    return [$user, $user->currentWorkspace()];
 }

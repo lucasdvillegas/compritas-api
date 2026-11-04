@@ -3,28 +3,38 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $workspace = $request->user()->currentWorkspace();
+
         return response()->json([
             'status' => true,
             'message' => 'Categorías obtenidas correctamente.',
-            'data' => Category::orderBy('name')->get(),
+            'data' => $workspace->categories()->orderBy('name')->get(),
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
+        $workspace = $request->user()->currentWorkspace();
+
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name',
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')
+                    ->where(fn ($query) => $query->where('workspace_id', $workspace->id)),
+            ],
         ]);
 
-        $category = Category::create($validated);
+        $category = $workspace->categories()->create($validated);
 
         return response()->json([
             'status' => true,
@@ -33,8 +43,12 @@ class CategoryController extends Controller
         ], 201);
     }
 
-    public function show(Category $category): JsonResponse
+    public function show(Request $request, int $category): JsonResponse
     {
+        $category = $request->user()->currentWorkspace()
+            ->categories()
+            ->findOrFail($category);
+
         return response()->json([
             'status' => true,
             'message' => 'Categoría obtenida correctamente.',
@@ -42,10 +56,21 @@ class CategoryController extends Controller
         ]);
     }
 
-    public function update(Request $request, Category $category): JsonResponse
+    public function update(Request $request, int $category): JsonResponse
     {
+        $workspace = $request->user()->currentWorkspace();
+
+        $category = $workspace->categories()->findOrFail($category);
+
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,'.$category->id,
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')
+                    ->where(fn ($query) => $query->where('workspace_id', $workspace->id))
+                    ->ignore($category->id),
+            ],
         ]);
 
         $category->update($validated);
@@ -57,8 +82,12 @@ class CategoryController extends Controller
         ]);
     }
 
-    public function destroy(Category $category): JsonResponse
+    public function destroy(Request $request, int $category): JsonResponse
     {
+        $category = $request->user()->currentWorkspace()
+            ->categories()
+            ->findOrFail($category);
+
         $category->delete();
 
         return response()->json([

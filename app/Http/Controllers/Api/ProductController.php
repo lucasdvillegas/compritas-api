@@ -3,29 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $workspace = $request->user()->currentWorkspace();
+
         return response()->json([
             'status' => true,
             'message' => 'Productos obtenidos correctamente.',
-            'data' => Product::with('category')->orderBy('name')->get(),
+            'data' => $workspace->products()->with('category')->orderBy('name')->get(),
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:products,name',
-            'category_id' => 'required|integer|exists:categories,id',
-        ]);
+        $workspace = $request->user()->currentWorkspace();
 
-        $product = Product::create($validated)->load('category');
+        $validated = $request->validate($this->rules($workspace->id));
+
+        $product = $workspace->products()->create($validated)->load('category');
 
         return response()->json([
             'status' => true,
@@ -34,21 +35,27 @@ class ProductController extends Controller
         ], 201);
     }
 
-    public function show(Product $product): JsonResponse
+    public function show(Request $request, int $product): JsonResponse
     {
+        $product = $request->user()->currentWorkspace()
+            ->products()
+            ->with('category')
+            ->findOrFail($product);
+
         return response()->json([
             'status' => true,
             'message' => 'Producto obtenido correctamente.',
-            'data' => $product->load('category'),
+            'data' => $product,
         ]);
     }
 
-    public function update(Request $request, Product $product): JsonResponse
+    public function update(Request $request, int $product): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:products,name,'.$product->id,
-            'category_id' => 'required|integer|exists:categories,id',
-        ]);
+        $workspace = $request->user()->currentWorkspace();
+
+        $product = $workspace->products()->findOrFail($product);
+
+        $validated = $request->validate($this->rules($workspace->id, $product->id));
 
         $product->update($validated);
 
@@ -59,8 +66,12 @@ class ProductController extends Controller
         ]);
     }
 
-    public function destroy(Product $product): JsonResponse
+    public function destroy(Request $request, int $product): JsonResponse
     {
+        $product = $request->user()->currentWorkspace()
+            ->products()
+            ->findOrFail($product);
+
         $product->delete();
 
         return response()->json([
@@ -68,5 +79,28 @@ class ProductController extends Controller
             'message' => 'Producto eliminado correctamente.',
             'data' => null,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function rules(int $workspaceId, ?int $productId = null): array
+    {
+        return [
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('products', 'name')
+                    ->where(fn ($query) => $query->where('workspace_id', $workspaceId))
+                    ->ignore($productId),
+            ],
+            'category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('categories', 'id')
+                    ->where(fn ($query) => $query->where('workspace_id', $workspaceId)),
+            ],
+        ];
     }
 }

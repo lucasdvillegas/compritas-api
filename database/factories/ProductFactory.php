@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Category;
 use App\Models\Product;
+use App\Models\Workspace;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,8 +19,9 @@ class ProductFactory extends Factory
     public function definition(): array
     {
         return [
+            'workspace_id' => Workspace::factory(),
             'name' => fake()->unique()->words(2, true),
-            'category_id' => Category::factory(),
+            'category_id' => null,
         ];
     }
 }

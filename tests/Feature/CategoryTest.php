@@ -1,9 +1,8 @@
 <?php
 
 use App\Models\Category;
-use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
@@ -21,11 +20,12 @@ test('store requires authentication', function () {
     $this->postJson('/api/categories', ['name' => 'Bebidas'])->assertUnauthorized();
 });
 
-test('index returns categories ordered by name', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('index returns only the current workspace categories ordered by name', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    Category::factory()->create(['name' => 'Lácteos']);
-    Category::factory()->create(['name' => 'Bebidas']);
+    Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Lácteos']);
+    Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
+    Category::factory()->create(['name' => 'Otra categoría']);
 
     $this->getJson('/api/categories')
         ->assertOk()
@@ -33,48 +33,69 @@ test('index returns categories ordered by name', function () {
             'status' => true,
             'message' => 'Categorías obtenidas correctamente.',
         ])
+        ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.name', 'Bebidas')
         ->assertJsonPath('data.1.name', 'Lácteos');
 });
 
-test('store creates a category', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('store creates a category in the current workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
     $this->postJson('/api/categories', ['name' => 'Bebidas'])
         ->assertCreated()
         ->assertJson([
             'status' => true,
             'message' => 'Categoría creada correctamente.',
-            'data' => ['name' => 'Bebidas'],
+            'data' => [
+                'name' => 'Bebidas',
+                'workspace_id' => $workspace->id,
+            ],
         ]);
 
-    $this->assertDatabaseHas('categories', ['name' => 'Bebidas']);
+    $this->assertDatabaseHas('categories', [
+        'name' => 'Bebidas',
+        'workspace_id' => $workspace->id,
+    ]);
 });
 
 test('store requires a name', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsWorkspaceUser();
 
     $this->postJson('/api/categories', ['name' => ''])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('name');
 });
 
-test('store requires a unique name', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('store requires a unique name within the workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    Category::factory()->create(['name' => 'Bebidas']);
+    Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
 
     $this->postJson('/api/categories', ['name' => 'Bebidas'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('name');
 
-    expect(Category::where('name', 'Bebidas')->count())->toBe(1);
+    expect(Category::where('workspace_id', $workspace->id)->where('name', 'Bebidas')->count())->toBe(1);
+});
+
+test('store allows the same category name in another workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    Category::factory()->create([
+        'workspace_id' => Workspace::factory()->create()->id,
+        'name' => 'Bebidas',
+    ]);
+
+    $this->postJson('/api/categories', ['name' => 'Bebidas'])
+        ->assertCreated();
+
+    expect(Category::where('workspace_id', $workspace->id)->where('name', 'Bebidas')->count())->toBe(1);
 });
 
 test('show returns a category', function () {
-    Sanctum::actingAs(User::factory()->create());
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $category = Category::factory()->create(['name' => 'Bebidas']);
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
 
     $this->getJson("/api/categories/{$category->id}")
         ->assertOk()
@@ -86,15 +107,23 @@ test('show returns a category', function () {
 });
 
 test('show returns not found for a missing category', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsWorkspaceUser();
 
     $this->getJson('/api/categories/999')->assertNotFound();
 });
 
-test('update changes the category name', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('show returns not found for a category from another workspace', function () {
+    actingAsWorkspaceUser();
 
-    $category = Category::factory()->create(['name' => 'Bebidas']);
+    $category = Category::factory()->create();
+
+    $this->getJson("/api/categories/{$category->id}")->assertNotFound();
+});
+
+test('update changes the category name', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
 
     $this->putJson("/api/categories/{$category->id}", ['name' => 'Bebidas sin alcohol'])
         ->assertOk()
@@ -108,28 +137,37 @@ test('update changes the category name', function () {
 });
 
 test('update allows keeping the same name', function () {
-    Sanctum::actingAs(User::factory()->create());
+    [, $workspace] = actingAsWorkspaceUser();
 
-    $category = Category::factory()->create(['name' => 'Bebidas']);
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
 
     $this->putJson("/api/categories/{$category->id}", ['name' => 'Bebidas'])->assertOk();
 });
 
-test('update requires a unique name', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('update requires a unique name within the workspace', function () {
+    [, $workspace] = actingAsWorkspaceUser();
 
-    Category::factory()->create(['name' => 'Bebidas']);
-    $category = Category::factory()->create(['name' => 'Lácteos']);
+    Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Bebidas']);
+    $category = Category::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Lácteos']);
 
     $this->putJson("/api/categories/{$category->id}", ['name' => 'Bebidas'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('name');
 });
 
-test('destroy deletes a category', function () {
-    Sanctum::actingAs(User::factory()->create());
+test('update returns not found for a category from another workspace', function () {
+    actingAsWorkspaceUser();
 
-    $category = Category::factory()->create();
+    $category = Category::factory()->create(['name' => 'Bebidas']);
+
+    $this->putJson("/api/categories/{$category->id}", ['name' => 'Lácteos'])
+        ->assertNotFound();
+});
+
+test('destroy deletes a category', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $category = Category::factory()->create(['workspace_id' => $workspace->id]);
 
     $this->deleteJson("/api/categories/{$category->id}")
         ->assertOk()
@@ -143,7 +181,15 @@ test('destroy deletes a category', function () {
 });
 
 test('destroy returns not found for a missing category', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsWorkspaceUser();
 
     $this->deleteJson('/api/categories/999')->assertNotFound();
+});
+
+test('destroy returns not found for a category from another workspace', function () {
+    actingAsWorkspaceUser();
+
+    $category = Category::factory()->create();
+
+    $this->deleteJson("/api/categories/{$category->id}")->assertNotFound();
 });
