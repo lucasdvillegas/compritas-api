@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['workspace_id', 'name', 'status', 'completed_at', 'total_amount'])]
+#[Fillable(['workspace_id', 'name', 'status', 'completed_at', 'total_amount', 'manual_total'])]
 class ShoppingList extends Model
 {
     /** @use HasFactory<ShoppingListFactory> */
@@ -52,6 +52,24 @@ class ShoppingList extends Model
         return $this->status === ShoppingListStatus::Completed;
     }
 
+    public function calculatedTotal(): float
+    {
+        return round(
+            $this->items->sum(fn (ShoppingListItem $item): float => $item->lineTotal() ?? 0),
+            2,
+        );
+    }
+
+    public function manualTotal(): ?float
+    {
+        return $this->manual_total === null ? null : (float) $this->manual_total;
+    }
+
+    public function effectiveTotal(): float
+    {
+        return $this->manualTotal() ?? $this->calculatedTotal();
+    }
+
     /**
      * @return array<string, string>
      */
@@ -61,6 +79,7 @@ class ShoppingList extends Model
             'status' => ShoppingListStatus::class,
             'completed_at' => 'datetime',
             'total_amount' => 'decimal:2',
+            'manual_total' => 'decimal:2',
         ];
     }
 }

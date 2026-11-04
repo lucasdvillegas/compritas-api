@@ -196,6 +196,49 @@ test('update requires a name', function () {
         ->assertJsonValidationErrors('name');
 });
 
+test('update sets a manual total', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+
+    $this->patchJson("/api/lists/{$list->id}", ['manual_total' => 1234.5])
+        ->assertOk()
+        ->assertJsonPath('data.manual_total', 1234.5);
+
+    $this->assertDatabaseHas('shopping_lists', [
+        'id' => $list->id,
+        'manual_total' => 1234.5,
+    ]);
+});
+
+test('update clears a manual total', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create([
+        'workspace_id' => $workspace->id,
+        'manual_total' => 1234.5,
+    ]);
+
+    $this->patchJson("/api/lists/{$list->id}", ['manual_total' => null])
+        ->assertOk()
+        ->assertJsonPath('data.manual_total', null);
+
+    $this->assertDatabaseHas('shopping_lists', [
+        'id' => $list->id,
+        'manual_total' => null,
+    ]);
+});
+
+test('update rejects a negative manual total', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+
+    $this->patchJson("/api/lists/{$list->id}", ['manual_total' => -1])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('manual_total');
+});
+
 test('update rejects a completed list', function () {
     [, $workspace] = actingAsWorkspaceUser();
 
@@ -277,4 +320,120 @@ test('complete returns not found for a list from another workspace', function ()
     $list = ShoppingList::factory()->create();
 
     $this->patchJson("/api/lists/{$list->id}/complete")->assertNotFound();
+});
+
+test('show calculates the total amount from the item prices', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 2,
+        'unit_price' => 1500.5,
+    ]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 3,
+        'unit_price' => 10.1,
+    ]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 5,
+        'unit_price' => null,
+    ]);
+
+    $this->getJson("/api/lists/{$list->id}")
+        ->assertOk()
+        ->assertJsonPath('data.total_amount', 3031.3)
+        ->assertJsonPath('data.items.0.line_total', 3001)
+        ->assertJsonPath('data.items.1.line_total', 30.3)
+        ->assertJsonPath('data.items.2.line_total', null);
+});
+
+test('index returns the stored total amount for completed lists', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    ShoppingList::factory()->completed()->create([
+        'workspace_id' => $workspace->id,
+        'total_amount' => 4321.5,
+    ]);
+
+    $this->getJson('/api/lists?status=completed')
+        ->assertOk()
+        ->assertJsonPath('data.0.total_amount', 4321.5);
+});
+
+test('complete stores the total amount snapshot', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 3,
+        'unit_price' => 100.25,
+    ]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 1,
+        'unit_price' => null,
+    ]);
+
+    $this->patchJson("/api/lists/{$list->id}/complete")
+        ->assertOk()
+        ->assertJsonPath('data.total_amount', 300.75);
+
+    $this->assertDatabaseHas('shopping_lists', [
+        'id' => $list->id,
+        'total_amount' => 300.75,
+    ]);
+});
+
+test('show returns the manual total overriding the computed total', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create([
+        'workspace_id' => $workspace->id,
+        'manual_total' => 5000,
+    ]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 2,
+        'unit_price' => 10,
+    ]);
+
+    $this->getJson("/api/lists/{$list->id}")
+        ->assertOk()
+        ->assertJsonPath('data.manual_total', 5000)
+        ->assertJsonPath('data.total_amount', 5000);
+});
+
+test('complete stores the manual total as the snapshot', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create([
+        'workspace_id' => $workspace->id,
+        'manual_total' => 7500,
+    ]);
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 2,
+        'unit_price' => 100,
+    ]);
+
+    $this->patchJson("/api/lists/{$list->id}/complete")
+        ->assertOk()
+        ->assertJsonPath('data.total_amount', 7500);
+
+    $this->assertDatabaseHas('shopping_lists', [
+        'id' => $list->id,
+        'manual_total' => 7500,
+        'total_amount' => 7500,
+    ]);
 });

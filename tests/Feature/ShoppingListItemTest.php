@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-function createProductInWorkspace($workspace, string $name): Product
+function createProductInWorkspace($workspace, string $name, string $unit = 'unit'): Product
 {
     $category = Category::firstOrCreate([
         'workspace_id' => $workspace->id,
@@ -19,6 +19,7 @@ function createProductInWorkspace($workspace, string $name): Product
         'workspace_id' => $workspace->id,
         'category_id' => $category->id,
         'name' => $name,
+        'unit' => $unit,
     ]);
 }
 
@@ -71,6 +72,54 @@ test('store accepts a quantity', function () {
     ])
         ->assertCreated()
         ->assertJsonPath('data.quantity', 3);
+});
+
+test('store snapshots the product unit', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $product = createProductInWorkspace($workspace, 'Manzana', 'kg');
+
+    $this->postJson("/api/lists/{$list->id}/items", ['product_id' => $product->id])
+        ->assertCreated()
+        ->assertJsonPath('data.unit', 'kg');
+
+    $this->assertDatabaseHas('shopping_list_items', [
+        'shopping_list_id' => $list->id,
+        'product_id' => $product->id,
+        'unit' => 'kg',
+    ]);
+});
+
+test('store accepts a fractional quantity for a product sold by weight', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $product = createProductInWorkspace($workspace, 'Manzana', 'kg');
+
+    $this->postJson("/api/lists/{$list->id}/items", [
+        'product_id' => $product->id,
+        'quantity' => 0.75,
+        'unit_price' => 1200,
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.unit', 'kg')
+        ->assertJsonPath('data.quantity', 0.75)
+        ->assertJsonPath('data.line_total', 900);
+});
+
+test('store rejects a quantity with more than three decimals', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $product = createProductInWorkspace($workspace, 'Manzana', 'kg');
+
+    $this->postJson("/api/lists/{$list->id}/items", [
+        'product_id' => $product->id,
+        'quantity' => 0.1234,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('quantity');
 });
 
 test('store accepts a checked flag', function () {
@@ -175,12 +224,12 @@ test('bulk store adds several products in a single request', function () {
 
     $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
     $manzana = createProductInWorkspace($workspace, 'Manzana');
-    $pera = createProductInWorkspace($workspace, 'Pera');
+    $pera = createProductInWorkspace($workspace, 'Pera', 'kg');
 
     $this->postJson("/api/lists/{$list->id}/items/bulk", [
         'items' => [
             ['product_id' => $manzana->id, 'quantity' => 1],
-            ['product_id' => $pera->id, 'quantity' => 2],
+            ['product_id' => $pera->id, 'quantity' => 0.5],
         ],
     ])
         ->assertOk()
@@ -190,8 +239,10 @@ test('bulk store adds several products in a single request', function () {
         ])
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.product_name', 'Manzana')
+        ->assertJsonPath('data.0.unit', 'unit')
         ->assertJsonPath('data.1.product_name', 'Pera')
-        ->assertJsonPath('data.1.quantity', 2);
+        ->assertJsonPath('data.1.unit', 'kg')
+        ->assertJsonPath('data.1.quantity', 0.5);
 
     expect($list->items()->count())->toBe(2);
 });
@@ -289,6 +340,29 @@ test('update changes the quantity', function () {
     ]);
 });
 
+test('update accepts a fractional quantity and recalculates the line total', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $item = ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'unit' => 'kg',
+        'quantity' => 1,
+        'unit_price' => 800,
+    ]);
+
+    $this->patchJson("/api/lists/{$list->id}/items/{$item->id}", ['quantity' => 1.5])
+        ->assertOk()
+        ->assertJsonPath('data.unit', 'kg')
+        ->assertJsonPath('data.quantity', 1.5)
+        ->assertJsonPath('data.line_total', 1200);
+
+    $this->assertDatabaseHas('shopping_list_items', [
+        'id' => $item->id,
+        'quantity' => 1.5,
+    ]);
+});
+
 test('update checks and unchecks an item while keeping it in the list', function () {
     [, $workspace] = actingAsWorkspaceUser();
 
@@ -369,4 +443,114 @@ test('destroy returns not found for an item from another workspace', function ()
 
     $this->deleteJson("/api/lists/{$list->id}/items/{$item->id}")
         ->assertNotFound();
+});
+
+test('store accepts a unit price', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $product = createProductInWorkspace($workspace, 'Manzana');
+
+    $this->postJson("/api/lists/{$list->id}/items", [
+        'product_id' => $product->id,
+        'quantity' => 2,
+        'unit_price' => 1500.5,
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.unit_price', 1500.5)
+        ->assertJsonPath('data.line_total', 3001);
+
+    $this->assertDatabaseHas('shopping_list_items', [
+        'shopping_list_id' => $list->id,
+        'product_id' => $product->id,
+        'unit_price' => 1500.5,
+    ]);
+});
+
+test('store rejects a negative unit price', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $product = createProductInWorkspace($workspace, 'Manzana');
+
+    $this->postJson("/api/lists/{$list->id}/items", [
+        'product_id' => $product->id,
+        'unit_price' => -1,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('unit_price');
+});
+
+test('store rejects a unit price with more than two decimals', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $product = createProductInWorkspace($workspace, 'Manzana');
+
+    $this->postJson("/api/lists/{$list->id}/items", [
+        'product_id' => $product->id,
+        'unit_price' => 10.999,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('unit_price');
+});
+
+test('update changes the unit price and recalculates the line total', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $item = ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'quantity' => 3,
+    ]);
+
+    $this->patchJson("/api/lists/{$list->id}/items/{$item->id}", ['unit_price' => 100.25])
+        ->assertOk()
+        ->assertJsonPath('data.unit_price', 100.25)
+        ->assertJsonPath('data.line_total', 300.75);
+
+    $this->assertDatabaseHas('shopping_list_items', [
+        'id' => $item->id,
+        'unit_price' => 100.25,
+    ]);
+});
+
+test('update clears the unit price', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $item = ShoppingListItem::factory()->create([
+        'shopping_list_id' => $list->id,
+        'unit_price' => 500,
+    ]);
+
+    $this->patchJson("/api/lists/{$list->id}/items/{$item->id}", ['unit_price' => null])
+        ->assertOk()
+        ->assertJsonPath('data.unit_price', null)
+        ->assertJsonPath('data.line_total', null);
+
+    $this->assertDatabaseHas('shopping_list_items', [
+        'id' => $item->id,
+        'unit_price' => null,
+    ]);
+});
+
+test('bulk store accepts unit prices', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $list = ShoppingList::factory()->create(['workspace_id' => $workspace->id]);
+    $manzana = createProductInWorkspace($workspace, 'Manzana');
+    $pera = createProductInWorkspace($workspace, 'Pera');
+
+    $this->postJson("/api/lists/{$list->id}/items/bulk", [
+        'items' => [
+            ['product_id' => $manzana->id, 'quantity' => 2, 'unit_price' => 10.5],
+            ['product_id' => $pera->id],
+        ],
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.0.unit_price', 10.5)
+        ->assertJsonPath('data.0.line_total', 21)
+        ->assertJsonPath('data.1.unit_price', null)
+        ->assertJsonPath('data.1.line_total', null);
 });

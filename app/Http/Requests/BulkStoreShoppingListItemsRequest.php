@@ -34,7 +34,8 @@ class BulkStoreShoppingListItemsRequest extends FormRequest
                 Rule::exists('products', 'id')
                     ->where(fn ($query) => $query->where('workspace_id', $workspaceId)),
             ],
-            'items.*.quantity' => ['sometimes', 'integer', 'min:1'],
+            'items.*.quantity' => ['sometimes', 'numeric', 'gt:0', 'decimal:0,3'],
+            'items.*.unit_price' => ['sometimes', 'nullable', 'numeric', 'decimal:0,2', 'min:0'],
         ];
     }
 }

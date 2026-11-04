@@ -96,6 +96,48 @@ test('store allows a product without a category', function () {
     ]);
 });
 
+test('store defaults the unit to unit', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $this->postJson('/api/products', ['name' => 'Agua mineral'])
+        ->assertCreated()
+        ->assertJsonPath('data.unit', 'unit');
+
+    $this->assertDatabaseHas('products', [
+        'name' => 'Agua mineral',
+        'workspace_id' => $workspace->id,
+        'unit' => 'unit',
+    ]);
+});
+
+test('store accepts a product sold by weight', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $this->postJson('/api/products', [
+        'name' => 'Manzana',
+        'unit' => 'kg',
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.unit', 'kg');
+
+    $this->assertDatabaseHas('products', [
+        'name' => 'Manzana',
+        'workspace_id' => $workspace->id,
+        'unit' => 'kg',
+    ]);
+});
+
+test('store rejects an invalid unit', function () {
+    actingAsWorkspaceUser();
+
+    $this->postJson('/api/products', [
+        'name' => 'Manzana',
+        'unit' => 'litro',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('unit');
+});
+
 test('store requires a name', function () {
     actingAsWorkspaceUser();
 
@@ -226,6 +268,28 @@ test('update allows keeping the same name', function () {
         'name' => 'Agua mineral',
         'category_id' => null,
     ])->assertOk();
+});
+
+test('update changes the unit', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $product = Product::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => 'Manzana',
+        'unit' => 'unit',
+    ]);
+
+    $this->putJson("/api/products/{$product->id}", [
+        'name' => 'Manzana',
+        'unit' => 'kg',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.unit', 'kg');
+
+    $this->assertDatabaseHas('products', [
+        'id' => $product->id,
+        'unit' => 'kg',
+    ]);
 });
 
 test('update requires a unique name within the workspace', function () {

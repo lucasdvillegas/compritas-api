@@ -32,8 +32,9 @@ class StoreShoppingListItemRequest extends FormRequest
                 Rule::exists('products', 'id')
                     ->where(fn ($query) => $query->where('workspace_id', $workspaceId)),
             ],
-            'quantity' => ['sometimes', 'integer', 'min:1'],
+            'quantity' => ['sometimes', 'numeric', 'gt:0', 'decimal:0,3'],
             'checked' => ['sometimes', 'boolean'],
+            'unit_price' => ['sometimes', 'nullable', 'numeric', 'decimal:0,2', 'min:0'],
         ];
     }
 }

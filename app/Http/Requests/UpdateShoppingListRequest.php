@@ -23,7 +23,8 @@ class UpdateShoppingListRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'manual_total' => ['sometimes', 'nullable', 'numeric', 'decimal:0,2', 'min:0'],
         ];
     }
 }

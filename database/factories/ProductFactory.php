@@ -22,6 +22,7 @@ class ProductFactory extends Factory
             'workspace_id' => Workspace::factory(),
             'name' => fake()->unique()->words(2, true),
             'category_id' => null,
+            'unit' => 'unit',
         ];
     }
 }

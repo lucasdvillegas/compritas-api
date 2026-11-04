@@ -31,9 +31,11 @@ class ShoppingListItemController extends Controller
             [
                 'product_name' => $product->name,
                 'category_name' => $product->category?->name,
-                'quantity' => $request->integer('quantity', 1),
+                'unit' => $product->unit->value,
+                'quantity' => (float) $request->input('quantity', 1),
                 'checked' => $request->boolean('checked'),
                 'checked_at' => $request->boolean('checked') ? now() : null,
+                'unit_price' => $request->validated('unit_price'),
             ],
         );
 
@@ -84,7 +86,9 @@ class ShoppingListItemController extends Controller
                     'product_id' => $product->id,
                     'product_name' => $product->name,
                     'category_name' => $product->category?->name,
-                    'quantity' => $requestedItem['quantity'] ?? 1,
+                    'unit' => $product->unit->value,
+                    'quantity' => (float) ($requestedItem['quantity'] ?? 1),
+                    'unit_price' => $requestedItem['unit_price'] ?? null,
                 ]);
             });
         });
@@ -107,12 +111,16 @@ class ShoppingListItemController extends Controller
         $validated = $request->validated();
 
         if (array_key_exists('quantity', $validated)) {
-            $item->quantity = $validated['quantity'];
+            $item->quantity = (float) $validated['quantity'];
         }
 
         if (array_key_exists('checked', $validated)) {
             $item->checked = (bool) $validated['checked'];
             $item->checked_at = $item->checked ? now() : null;
+        }
+
+        if (array_key_exists('unit_price', $validated)) {
+            $item->unit_price = $validated['unit_price'];
         }
 
         $item->save();

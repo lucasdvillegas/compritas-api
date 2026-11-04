@@ -23,6 +23,7 @@ class ShoppingListItemFactory extends Factory
             'product_id' => null,
             'product_name' => fake()->words(2, true),
             'category_name' => null,
+            'unit' => 'unit',
             'quantity' => 1,
             'checked' => false,
             'checked_at' => null,

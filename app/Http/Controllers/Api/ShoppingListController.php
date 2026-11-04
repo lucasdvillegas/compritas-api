@@ -104,9 +104,12 @@ class ShoppingListController extends Controller
 
         Gate::authorize('complete', $list);
 
+        $list->load('items');
+
         $list->update([
             'status' => ShoppingListStatus::Completed,
             'completed_at' => now(),
+            'total_amount' => $list->effectiveTotal(),
         ]);
 
         $list->loadCount(['items', 'checkedItems']);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ProductUnit;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,6 +102,7 @@ class ProductController extends Controller
                 Rule::exists('categories', 'id')
                     ->where(fn ($query) => $query->where('workspace_id', $workspaceId)),
             ],
+            'unit' => ['sometimes', Rule::enum(ProductUnit::class)],
         ];
     }
 }
