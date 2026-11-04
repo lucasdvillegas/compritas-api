@@ -278,6 +278,41 @@ test('stats reject invalid filters', function () {
         ->assertJsonValidationErrors('limit');
 });
 
+test('categories and products can be filtered by month', function () {
+    [, $workspace] = actingAsWorkspaceUser();
+
+    $february = completedListWithTotal($workspace, 100, '2026-02-10 10:00:00');
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $february->id,
+        'product_name' => 'Manzana',
+        'category_name' => 'Frutas',
+        'unit_price' => 100,
+        'quantity' => 1,
+    ]);
+
+    $march = completedListWithTotal($workspace, 50, '2026-03-10 10:00:00');
+
+    ShoppingListItem::factory()->create([
+        'shopping_list_id' => $march->id,
+        'product_name' => 'Lechuga',
+        'category_name' => 'Verduras',
+        'unit_price' => 50,
+        'quantity' => 1,
+    ]);
+
+    $this->getJson('/api/stats/categories?from=2026-03-01&to=2026-03-31')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.categories')
+        ->assertJsonPath('data.categories.0.category_name', 'Verduras')
+        ->assertJsonPath('data.categories.0.amount', 50);
+
+    $this->getJson('/api/stats/products?from=2026-03-01&to=2026-03-31')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.products')
+        ->assertJsonPath('data.products.0.product_name', 'Lechuga');
+});
+
 test('stats return zeros when there is no data', function () {
     actingAsWorkspaceUser();
 
