@@ -2,43 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\Category;
 use App\Models\Workspace;
+use App\Services\DefaultCatalogService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 
 class CategorySeeder extends Seeder
 {
-    /**
-     * Categorías de ejemplo para probar los listados.
-     *
-     * @var array<int, string>
-     */
-    public const CATEGORIES = [
-        'Frutas',
-        'Verduras',
-        'Lácteos',
-        'Carnes',
-        'Pescados',
-        'Panadería',
-        'Fiambres',
-        'Bebidas',
-        'Almacén',
-        'Congelados',
-        'Limpieza',
-        'Perfumería',
-        'Bebés',
-        'Mascotas',
-        'Snacks',
-        'Desayuno',
-        'Pastas',
-        'Conservas',
-        'Especias',
-        'Hogar',
-    ];
-
     public function run(): void
     {
+        $catalog = app(DefaultCatalogService::class);
         $workspaces = $this->targetWorkspaces();
 
         if ($workspaces->isEmpty()) {
@@ -48,17 +21,12 @@ class CategorySeeder extends Seeder
         }
 
         foreach ($workspaces as $workspace) {
-            foreach (self::CATEGORIES as $name) {
-                Category::firstOrCreate([
-                    'workspace_id' => $workspace->id,
-                    'name' => $name,
-                ]);
-            }
+            $catalog->seedCategoriesForWorkspace($workspace);
         }
 
         $this->command?->info(sprintf(
             'Categorías aseguradas: %d por workspace (%d workspace/s).',
-            count(self::CATEGORIES),
+            count(DefaultCatalogService::CATEGORIES),
             $workspaces->count(),
         ));
     }

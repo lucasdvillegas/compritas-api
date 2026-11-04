@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\DefaultCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly DefaultCatalogService $catalog) {}
+
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -19,7 +23,12 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = User::create($validated);
+        $user = DB::transaction(function () use ($validated): User {
+            $user = User::create($validated);
+            $this->catalog->seedForWorkspace($user->currentWorkspace());
+
+            return $user;
+        });
 
         $token = $user->createToken('auth_token')->plainTextToken;
 

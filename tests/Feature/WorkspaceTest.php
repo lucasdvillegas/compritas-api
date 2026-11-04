@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\DefaultCatalogService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -32,6 +33,35 @@ test('factory users receive a personal workspace', function () {
 
     expect($user->workspaces)->toHaveCount(1)
         ->and($user->currentWorkspace()->owner_id)->toBe($user->id);
+});
+
+test('registration seeds the default catalog in the personal workspace', function () {
+    $this->postJson('/api/auth/register', [
+        'name' => 'Lucas',
+        'email' => 'lucas@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ])->assertCreated();
+
+    $workspace = User::where('email', 'lucas@example.com')->firstOrFail()->currentWorkspace();
+    $catalog = app(DefaultCatalogService::class);
+
+    expect($workspace->categories()->count())->toBe(count(DefaultCatalogService::CATEGORIES))
+        ->and($workspace->products()->count())->toBe($catalog->productCount());
+
+    $this->assertDatabaseHas('products', [
+        'workspace_id' => $workspace->id,
+        'name' => 'Manzana Roja',
+        'unit' => 'kg',
+    ]);
+});
+
+test('factory users do not receive the default catalog', function () {
+    $user = User::factory()->create();
+    $workspace = $user->currentWorkspace();
+
+    expect($workspace->categories()->count())->toBe(0)
+        ->and($workspace->products()->count())->toBe(0);
 });
 
 test('a workspace exposes its owner, members and catalog', function () {
