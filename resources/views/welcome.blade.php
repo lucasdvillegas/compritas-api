@@ -1,9 +1,3 @@
-@php
-    $appUrl = rtrim(config('app.frontend_url', 'http://localhost:9000'), '/');
-    $loginUrl = $appUrl . '/#/login';
-    $registerUrl = $appUrl . '/#/register';
-@endphp
-
 <!DOCTYPE html>
 <html lang="es">
     <head>
@@ -1049,8 +1043,14 @@
                 </nav>
 
                 <div class="header-actions">
-                    <a class="btn btn--ghost" href="{{ $loginUrl }}">Iniciar sesión</a>
-                    <a class="btn btn--primary" href="{{ $registerUrl }}">Crear cuenta</a>
+                    <a class="btn btn--primary" href="/compritapp.apk" download>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3v12"/>
+                            <path d="m7 10 5 5 5-5"/>
+                            <path d="M5 21h14"/>
+                        </svg>
+                        Descargar para Android
+                    </a>
                     <button class="nav-toggle" type="button" aria-label="Abrir menú" aria-controls="site-nav" aria-expanded="false">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
                             <path d="M4 7h16M4 12h16M4 17h16"/>
@@ -1077,11 +1077,18 @@
                         </p>
 
                         <div class="hero__actions reveal">
-                            <a class="btn btn--primary" href="{{ $registerUrl }}">Crear cuenta gratis</a>
+                            <a class="btn btn--primary" href="/compritapp.apk" download>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3v12"/>
+                                    <path d="m7 10 5 5 5-5"/>
+                                    <path d="M5 21h14"/>
+                                </svg>
+                                Descargar para Android
+                            </a>
                             <a class="btn btn--ghost" href="#funciones">Ver funciones</a>
                         </div>
 
-                        <p class="hero__note reveal">Gratis · Sin instalar · Colaborativo</p>
+                        <p class="hero__note reveal">Android · Gratis · Para pruebas personales</p>
                     </div>
 
                     <div class="hero__visual reveal">
@@ -1404,11 +1411,17 @@
                     <div class="cta-card reveal">
                         <div>
                             <h2>¿Arrancamos con la próxima compra?</h2>
-                            <p>Creá tu cuenta, armá la lista y compartila. El resto es comprar.</p>
+                            <p>Descargá la app, armá tu lista y compartila. El resto es comprar.</p>
                         </div>
                         <div class="cta-actions">
-                            <a class="btn btn--light" href="{{ $registerUrl }}">Crear cuenta gratis</a>
-                            <a class="btn btn--outline-light" href="{{ $loginUrl }}">Ya tengo cuenta</a>
+                            <a class="btn btn--light" href="/compritapp.apk" download>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3v12"/>
+                                    <path d="m7 10 5 5 5-5"/>
+                                    <path d="M5 21h14"/>
+                                </svg>
+                                Descargar para Android
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -1431,8 +1444,7 @@
                 <nav class="footer-nav" aria-label="Secundario">
                     <a href="#funciones">Funciones</a>
                     <a href="#la-app">La app</a>
-                    <a href="{{ $loginUrl }}">Iniciar sesión</a>
-                    <a href="{{ $registerUrl }}">Crear cuenta</a>
+                    <a href="/compritapp.apk" download>Descargar para Android</a>
                 </nav>
 
                 <div class="footer-copy">© {{ date('Y') }} Compritapp · Tus compras, en orden.</div>
